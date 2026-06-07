@@ -2,11 +2,9 @@
 
 A self-contained browser tool for applying **Decorrelation Stretch** to an image or to a selected rectangular region of an image.
 
-This tool runs entirely in the browser using HTML, JavaScript, Canvas, and an inline Web Worker. It does not require a server-side runtime, Python, WebAssembly, OpenCV.js, external CDNs, or a build step.
+This tool runs entirely in the browser using HTML, JavaScript, Canvas, and an inline Web Worker.
 
-> **Important**
->
-> This application creates an enhanced visualization derived from the original image. It is intended as an inspection aid, not as a replacement for the original evidence image. Always compare the enhanced result with the original image.
+In Japanese, See [README-ja.md](./README-ja.md).
 
 ## Features
 
@@ -30,36 +28,8 @@ This tool runs entirely in the browser using HTML, JavaScript, Canvas, and an in
 The project is implemented as a single file:
 
 ```text
-decorrelation-stretch.html
+src/index.html
 ```
-
-Open this file in a browser to use the tool.
-
-If your browser restricts some functionality when opened via `file://`, serve the folder locally:
-
-```bash
-python -m http.server 8000
-```
-
-Then open:
-
-```text
-http://localhost:8000/decorrelation-stretch.html
-```
-
-## Browser requirements
-
-Use a browser that supports the following APIs:
-
-- Canvas API
-- ImageData
-- File API
-- Drag and Drop API
-- Web Worker
-- Blob URL
-- `createImageBitmap`
-
-Recent versions of Chrome, Edge, Firefox, and Safari should work.
 
 ## Quick start
 
@@ -71,15 +41,6 @@ Recent versions of Chrome, Edge, Firefox, and Safari should work.
 6. Compare the enhanced image with the original.
 7. Save the result with **PNG保存**.
 8. Save processing metadata with **パラメータJSON保存**.
-
-## UI overview
-
-| Area | Purpose |
-|---|---|
-| Operation panel | Presets, numeric parameters, run/reset/save buttons |
-| Original image pane | Displays the input image and supports rectangular region selection |
-| Enhanced image pane | Displays the processed image and supports PNG drag export |
-| Processing log | Shows progress, parameter values, and metadata |
 
 ## Presets
 
@@ -105,8 +66,6 @@ Use weaker presets first in audit-sensitive workflows. Stronger presets are usef
 
 ## Region selection
 
-By default, the tool applies Decorrelation Stretch to the full image.
-
 You can drag on the original image to define a rectangular region. When a region is selected:
 
 - RGB statistics are estimated only from the selected region.
@@ -115,6 +74,8 @@ You can drag on the original image to define a rectangular region. When a region
 - The selected region is recorded in the metadata JSON.
 
 This is useful when the target information occupies only part of the image. For example, if a sprayed number is located on an animal body, selecting the body or number area can reduce the influence of unrelated background colors.
+
+By default, the tool applies Decorrelation Stretch to the full image.
 
 ## Output files
 
@@ -428,17 +389,6 @@ Try selecting a smaller region. Also reduce the input image size if extremely hi
 
 Use the **PNG保存** button instead. Drag export behavior may vary by browser and operating system.
 
-## Audit note
-
-For inspection workflows, store the following together:
-
-- the original image,
-- the enhanced PNG,
-- the exported metadata JSON,
-- the decision or review note.
-
-The enhanced image alone is not a sufficient audit record.
-
 ## License
 
-Add your project license here.
+See [LICENSE](LICENSE).
