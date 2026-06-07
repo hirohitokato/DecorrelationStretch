@@ -9,19 +9,16 @@ In Japanese, See [README-ja.md](./README-ja.md).
 ## Features
 
 - Single-file HTML application.
-- Runs locally in a modern web browser.
-- No external dependencies.
-- Image loading by click or drag-and-drop.
-- Original image and enhanced image are shown side by side.
+    - Runs locally in a modern web browser.
+    - No external dependencies.
 - Rectangle selection on the original image.
-- Decorrelation Stretch can be applied to the full image or to the selected rectangular region.
-- Processing is executed in a Web Worker so the UI remains responsive.
-- Presets for weak, medium, strong, and very strong enhancement.
+    - Decorrelation Stretch can be applied to the full image or to the selected rectangular region.
 - Manual control of all major algorithm parameters.
+    - Presets for weak, medium, strong, and very strong enhancement.
 - PNG export.
-- Drag export of the enhanced PNG from the result pane.
+    - Drag export of the enhanced PNG from the result pane.
 - JSON metadata export for reproducibility and audit workflows.
-- Processing log including parameters, covariance, eigenvalues, eigenvectors, scales, and output range.
+    - Processing log including parameters, covariance, eigenvalues, eigenvectors, scales, and output range.
 
 ## Files
 
