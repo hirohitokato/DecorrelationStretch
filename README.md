@@ -2,6 +2,8 @@
 
 A self-contained browser tool for applying **Decorrelation Stretch** to an image or to a selected rectangular region of an image.
 
+![screenshot](assets/screenshot.jpg)
+
 This tool runs entirely in the browser using HTML, JavaScript, Canvas, and an inline Web Worker.
 
 In Japanese, See [README-ja.md](./README-ja.md).

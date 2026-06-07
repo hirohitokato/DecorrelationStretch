@@ -2,6 +2,8 @@
 
 画像全体または選択した矩形領域に **Decorrelation Stretch** を適用する、ブラウザ単体で動作する画像補正ツールです。
 
+![screenshot](assets/screenshot.jpg)
+
 このツールは、HTML、JavaScript、Canvas、インラインWeb Workerだけで構成されています。
 
 ## 主な機能

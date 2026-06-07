@@ -134,7 +134,7 @@
 
       .actions {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr));
         gap: 12px;
         margin-top: 16px;
       }
@@ -151,6 +151,11 @@
         background: var(--accent);
         color: #fff;
         border-color: var(--accent);
+      }
+
+      button.primary.prominent {
+        min-height: 56px;
+        font-size: 16px;
       }
 
       button:disabled {
@@ -208,7 +213,7 @@
         min-height: 240px;
         border: 1px solid var(--border);
         border-radius: 8px;
-        background: #f8fafc;
+        background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
         display: grid;
         place-items: center;
         overflow: auto;
@@ -224,11 +229,13 @@
 
       .drop-target {
         border-style: dashed;
+        border-width: 2px;
       }
 
       .drop-target.drag-active {
         border-color: var(--accent);
-        background: #eff6ff;
+        background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+        box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.18);
       }
 
       .drag-export {
@@ -265,6 +272,42 @@
         margin-top: 10px;
         color: var(--muted);
         font-size: 13px;
+      }
+
+      .pane-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .pane-title h2 {
+        margin: 0;
+      }
+
+      .pane-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #eff6ff;
+        color: #1d4ed8;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
+        white-space: nowrap;
+      }
+
+      .custom-controls[hidden] {
+        display: none;
+      }
+
+      .result-frame {
+        cursor: pointer;
+      }
+
+      .result-frame.result-static {
+        cursor: default;
       }
 
       .log-panel pre {
@@ -319,6 +362,11 @@
               プリセット
               <select id="presetSelect"></select>
             </label>
+          </div>
+          <div id="inputDropHint" class="hint">
+            原画像エリアをクリックすると画像を選択できます。ドラッグアンドドロップでも読み込めます。
+          </div>
+          <div id="customControls" class="control-grid custom-controls" hidden>
             <label>
               乱数シード
               <input id="randomSeed" type="number" step="1" value="0">
@@ -327,12 +375,6 @@
               共分散推定に使う最大画素数
               <input id="samplePixels" type="number" step="1" value="250000">
             </label>
-          </div>
-          <div id="inputDropHint" class="hint">
-            原画像エリアをクリックすると画像を選択できます。ドラッグアンドドロップでも読み込めます。
-          </div>
-
-          <div class="control-grid">
             <label>
               色差強調の目標標準偏差
               <input id="targetStd" type="number" step="0.1" value="55">
@@ -352,8 +394,7 @@
           </div>
 
           <div class="actions">
-            <button id="runButton" class="primary">補正実行</button>
-            <button id="resetButton">原画像に戻す</button>
+            <button id="runButton" class="primary prominent">補正実行</button>
             <button id="savePngButton">PNG保存</button>
             <button id="saveJsonButton">パラメータJSON保存</button>
           </div>
@@ -372,7 +413,12 @@
 
         <section class="panes">
           <div class="pane">
-            <h2>原画像</h2>
+            <div class="pane-title">
+              <h2>原画像</h2>
+              <span id="inputModeBadge" class="pane-badge">
+                クリックまたはドラッグ&ドロップ
+              </span>
+            </div>
             <div id="inputDropZone" class="canvas-frame drop-target">
               <div class="canvas-stage">
                 <canvas id="originalCanvas"></canvas>
@@ -391,13 +437,13 @@
             <h2>補正後</h2>
             <div
               id="resultDragZone"
-              class="canvas-frame drag-export drag-disabled"
+              class="canvas-frame result-frame drag-export drag-disabled result-static"
             >
               <canvas id="resultCanvas" draggable="false"></canvas>
             </div>
             <div id="resultMeta" class="meta">未処理</div>
             <div class="hint">
-              補正後画像は外部へドラッグしてPNG保存できます。
+              補正後画像は外部へドラッグしてPNG保存できます。クリックで全体表示と補正領域の拡大表示を切り替えます。
             </div>
           </div>
         </section>
@@ -418,6 +464,7 @@
     <script>
       const APP_VERSION = "0.1.0";
       const PRESETS = {
+        カスタム: null,
         "色差強調 弱": {
           targetStd: 40,
           lowPercentile: 1.0,
@@ -457,9 +504,12 @@
       let resultImageData = null;
       let lastMetadata = null;
       let currentWorker = null;
+      let resultViewMode = "full";
+      let resultRegion = null;
 
       const fileInput = document.getElementById("fileInput");
       const presetSelect = document.getElementById("presetSelect");
+      const customControls = document.getElementById("customControls");
       const targetStdInput = document.getElementById("targetStd");
       const lowPercentileInput = document.getElementById(
         "lowPercentile",
@@ -471,7 +521,6 @@
       const samplePixelsInput = document.getElementById("samplePixels");
       const randomSeedInput = document.getElementById("randomSeed");
       const runButton = document.getElementById("runButton");
-      const resetButton = document.getElementById("resetButton");
       const savePngButton = document.getElementById("savePngButton");
       const saveJsonButton = document.getElementById("saveJsonButton");
       const originalCanvas = document.getElementById("originalCanvas");
@@ -481,6 +530,7 @@
       const resultCanvas = document.getElementById("resultCanvas");
       const inputDropZone = document.getElementById("inputDropZone");
       const resultDragZone = document.getElementById("resultDragZone");
+      const inputModeBadge = document.getElementById("inputModeBadge");
       const originalMeta = document.getElementById("originalMeta");
       const resultMeta = document.getElementById("resultMeta");
       const logOutput = document.getElementById("logOutput");
@@ -501,11 +551,12 @@
         });
 
         presetSelect.value = "色差強調 中";
-        setPreset(presetSelect.value);
+        applyPreset(presetSelect.value);
+        updateCustomControlsVisibility();
 
         presetSelect.addEventListener(
           "change",
-          () => setPreset(presetSelect.value),
+          handlePresetChange,
         );
         fileInput.addEventListener("change", async (event) => {
           const file = event.target.files && event.target.files[0];
@@ -525,9 +576,9 @@
           }
         });
         runButton.addEventListener("click", runProcessing);
-        resetButton.addEventListener("click", resetResultToOriginal);
         savePngButton.addEventListener("click", saveResultPng);
         saveJsonButton.addEventListener("click", saveMetadataJson);
+        resultDragZone.addEventListener("click", toggleResultViewMode);
         initDragAndDrop();
         initSelectionOverlay();
 
@@ -643,6 +694,18 @@
       }
 
       function setPreset(name) {
+        presetSelect.value = name;
+        if (name !== "カスタム") {
+          applyPreset(name);
+        }
+        updateCustomControlsVisibility();
+      }
+
+      function handlePresetChange() {
+        setPreset(presetSelect.value);
+      }
+
+      function applyPreset(name) {
         const preset = PRESETS[name];
         if (!preset) {
           return;
@@ -655,6 +718,10 @@
         samplePixelsInput.value = preset.samplePixels;
         randomSeedInput.value = preset.randomSeed;
         log("プリセットを反映: " + name);
+      }
+
+      function updateCustomControlsVisibility() {
+        customControls.hidden = presetSelect.value !== "カスタム";
       }
 
       function readParams() {
@@ -709,12 +776,16 @@
         resultCanvas.height = 0;
         resultImageData = null;
         lastMetadata = null;
+        resultViewMode = "full";
+        resultRegion = null;
         revokeResultDragUrl();
         resultMeta.textContent = "未処理";
         savePngButton.disabled = true;
         saveJsonButton.disabled = true;
         updateResultDragExportState();
         originalMeta.textContent = buildOriginalMetaText();
+        inputDropZone.classList.add("has-image");
+        inputModeBadge.textContent = "画像差し替え: クリックまたはドラッグ&ドロップ";
         statusText.textContent = "画像読み込み完了";
         progressBar.style.width = "0%";
         log("画像を読み込みました: " + originalFileName);
@@ -852,12 +923,15 @@
             lastMetadata.sourceFileName = originalFileName;
             lastMetadata.userAgent = navigator.userAgent;
           }
+          resultRegion = lastMetadata && lastMetadata.region
+            ? { ...lastMetadata.region }
+            : null;
+          resultViewMode = "full";
           savePngButton.disabled = false;
           saveJsonButton.disabled = false;
           statusText.textContent = "完了";
           progressBar.style.width = "100%";
-          resultMeta.textContent = "補正後画像: " + message.width +
-            " x " + message.height;
+          resultMeta.textContent = buildResultMetaText();
           log("補正処理が完了しました。");
           if (lastMetadata) {
             logJson(lastMetadata);
@@ -872,13 +946,61 @@
 
       function drawResultImage(width, height, buffer) {
         const resultData = new Uint8ClampedArray(buffer);
-        const imageData = new ImageData(resultData, width, height);
-        const context = resultCanvas.getContext("2d");
-        resultCanvas.width = width;
-        resultCanvas.height = height;
-        context.putImageData(imageData, 0, 0);
-        resultImageData = imageData;
+        resultImageData = new ImageData(resultData, width, height);
+        renderResultCanvas();
         updateResultDragExportBlob();
+      }
+
+      function renderResultCanvas() {
+        const context = resultCanvas.getContext("2d");
+        if (!context || !resultImageData) {
+          resultCanvas.width = 0;
+          resultCanvas.height = 0;
+          updateResultViewState();
+          return;
+        }
+
+        resultCanvas.width = resultImageData.width;
+        resultCanvas.height = resultImageData.height;
+        context.clearRect(0, 0, resultCanvas.width, resultCanvas.height);
+
+        if (resultViewMode === "selection" && canToggleResultView()) {
+          drawRegionZoom(context, resultImageData, resultRegion);
+        } else {
+          context.putImageData(resultImageData, 0, 0);
+        }
+
+        updateResultViewState();
+      }
+
+      function drawRegionZoom(context, imageData, region) {
+        const sourceCanvas = document.createElement("canvas");
+        sourceCanvas.width = imageData.width;
+        sourceCanvas.height = imageData.height;
+        const sourceContext = sourceCanvas.getContext("2d");
+        sourceContext.putImageData(imageData, 0, 0);
+        const scale = Math.min(
+          resultCanvas.width / region.width,
+          resultCanvas.height / region.height,
+        );
+        const drawWidth = Math.max(1, Math.round(region.width * scale));
+        const drawHeight = Math.max(1, Math.round(region.height * scale));
+        const offsetX = Math.floor((resultCanvas.width - drawWidth) / 2);
+        const offsetY = Math.floor((resultCanvas.height - drawHeight) / 2);
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, resultCanvas.width, resultCanvas.height);
+        context.imageSmoothingEnabled = false;
+        context.drawImage(
+          sourceCanvas,
+          region.x,
+          region.y,
+          region.width,
+          region.height,
+          offsetX,
+          offsetY,
+          drawWidth,
+          drawHeight,
+        );
       }
 
       function getEffectiveRegion() {
@@ -1057,23 +1179,70 @@
           return;
         }
 
-        context.fillStyle = "rgba(37, 99, 235, 0.14)";
-        context.strokeStyle = "rgba(37, 99, 235, 0.95)";
-        context.lineWidth = 2;
+        const left = selectionRect.x;
+        const top = selectionRect.y;
+        const right = selectionRect.x + selectionRect.width;
+        const bottom = selectionRect.y + selectionRect.height;
+
+        context.fillStyle = "rgba(3, 7, 18, 0.68)";
+        context.fillRect(0, 0, selectionOverlay.width, top);
+        context.fillRect(0, bottom, selectionOverlay.width, selectionOverlay.height - bottom);
+        context.fillRect(0, top, left, selectionRect.height);
+        context.fillRect(right, top, selectionOverlay.width - right, selectionRect.height);
+
+        context.save();
+        context.globalCompositeOperation = "screen";
+        context.fillStyle = "rgba(244, 63, 94, 0.34)";
+        context.fillRect(0, 0, selectionOverlay.width, top);
+        context.fillRect(0, bottom, selectionOverlay.width, selectionOverlay.height - bottom);
+        context.fillRect(0, top, left, selectionRect.height);
+        context.fillRect(right, top, selectionOverlay.width - right, selectionRect.height);
+        context.restore();
+
+        context.save();
+        context.strokeStyle = "rgba(255, 255, 255, 0.16)";
+        context.lineWidth = 1;
+        for (let offset = -selectionOverlay.height; offset < selectionOverlay.width; offset += 14) {
+          context.beginPath();
+          context.moveTo(offset, 0);
+          context.lineTo(offset + selectionOverlay.height, selectionOverlay.height);
+          context.stroke();
+        }
+        context.clearRect(
+          left,
+          top,
+          selectionRect.width,
+          selectionRect.height,
+        );
+        context.restore();
+
+        context.strokeStyle = "rgba(255, 255, 255, 0.98)";
+        context.lineWidth = 3;
         context.setLineDash([8, 6]);
-        context.fillRect(
-          selectionRect.x,
-          selectionRect.y,
-          selectionRect.width,
-          selectionRect.height,
-        );
         context.strokeRect(
-          selectionRect.x,
-          selectionRect.y,
+          left,
+          top,
           selectionRect.width,
           selectionRect.height,
         );
+        context.strokeStyle = "rgba(37, 99, 235, 1)";
+        context.lineWidth = 1.5;
         context.setLineDash([]);
+        context.strokeRect(
+          left + 1.5,
+          top + 1.5,
+          Math.max(0, selectionRect.width - 3),
+          Math.max(0, selectionRect.height - 3),
+        );
+        context.fillStyle = "rgba(37, 99, 235, 0.95)";
+        context.font = "bold 14px sans-serif";
+        const label = "補正範囲";
+        const labelWidth = context.measureText(label).width + 18;
+        const labelX = left;
+        const labelY = Math.max(0, top - 30);
+        context.fillRect(labelX, labelY, labelWidth, 24);
+        context.fillStyle = "#ffffff";
+        context.fillText(label, labelX + 9, labelY + 16);
       }
 
       function clearSelection() {
@@ -1156,30 +1325,20 @@
         return { x, y, width, height };
       }
 
-      function resetResultToOriginal() {
-        clearError();
-
-        if (!originalImageData) {
-          showError("画像が選択されていません。");
+      function toggleResultViewMode() {
+        if (!resultImageData || !canToggleResultView()) {
           return;
         }
 
-        const context = resultCanvas.getContext("2d");
-        resultCanvas.width = originalImageData.width;
-        resultCanvas.height = originalImageData.height;
-        context.putImageData(originalImageData, 0, 0);
-        resultImageData = new ImageData(
-          new Uint8ClampedArray(originalImageData.data),
-          originalImageData.width,
-          originalImageData.height,
+        resultViewMode = resultViewMode === "full" ? "selection" : "full";
+        renderResultCanvas();
+        resultMeta.textContent = buildResultMetaText();
+        log(
+          "補正後表示を切り替え: " +
+            (resultViewMode === "full"
+              ? "全体表示"
+              : "補正領域の拡大表示"),
         );
-        resultMeta.textContent = "原画像を表示中";
-        statusText.textContent = "原画像に戻しました";
-        progressBar.style.width = "0%";
-        log("補正後表示を原画像に戻しました。");
-        savePngButton.disabled = false;
-        saveJsonButton.disabled = !lastMetadata;
-        updateResultDragExportBlob();
       }
 
       function saveResultPng() {
@@ -1192,7 +1351,13 @@
         }
 
         // 強調後の微細な色差を保持したいので、初期版では非可逆JPEGではなくPNGを保存する。
-        resultCanvas.toBlob((blob) => {
+        const exportCanvas = document.createElement("canvas");
+        exportCanvas.width = resultImageData.width;
+        exportCanvas.height = resultImageData.height;
+        const exportContext = exportCanvas.getContext("2d");
+        exportContext.putImageData(resultImageData, 0, 0);
+
+        exportCanvas.toBlob((blob) => {
           if (!blob) {
             showError("PNG 保存に失敗しました。");
             return;
@@ -1238,16 +1403,19 @@
       }
 
       function updateResultDragExportBlob() {
-        if (
-          !resultImageData || resultCanvas.width === 0 ||
-          resultCanvas.height === 0
-        ) {
+        if (!resultImageData) {
           revokeResultDragUrl();
           updateResultDragExportState();
           return;
         }
 
-        resultCanvas.toBlob((blob) => {
+        const exportCanvas = document.createElement("canvas");
+        exportCanvas.width = resultImageData.width;
+        exportCanvas.height = resultImageData.height;
+        const exportContext = exportCanvas.getContext("2d");
+        exportContext.putImageData(resultImageData, 0, 0);
+
+        exportCanvas.toBlob((blob) => {
           if (!blob) {
             revokeResultDragUrl();
             updateResultDragExportState();
@@ -1270,12 +1438,38 @@
         resultDragZone.draggable = enabled;
         resultCanvas.draggable = enabled;
         resultDragZone.classList.toggle("drag-disabled", !enabled);
-        resultMeta.textContent = enabled
-          ? (resultMeta.textContent.replace(
-            / ?\/ ドラッグ保存可$/,
-            "",
-          ) + " / ドラッグ保存可")
-          : resultMeta.textContent.replace(/ ?\/ ドラッグ保存可$/, "");
+        updateResultViewState();
+        if (resultImageData) {
+          resultMeta.textContent = buildResultMetaText();
+        }
+      }
+
+      function canToggleResultView() {
+        return Boolean(
+          resultImageData && resultRegion && originalImageData &&
+            (resultRegion.width < originalImageData.width ||
+              resultRegion.height < originalImageData.height),
+        );
+      }
+
+      function updateResultViewState() {
+        resultDragZone.classList.toggle(
+          "result-static",
+          !canToggleResultView(),
+        );
+      }
+
+      function buildResultMetaText() {
+        if (!resultImageData) {
+          return "未処理";
+        }
+
+        const mode = resultViewMode === "selection" && canToggleResultView()
+          ? "補正領域を拡大表示中"
+          : "全体表示中";
+        const drag = resultDragUrl ? " / ドラッグ保存可" : "";
+        return "補正後画像: " + resultImageData.width + " x " +
+          resultImageData.height + " / " + mode + drag;
       }
 
       function revokeResultDragUrl() {
@@ -1317,7 +1511,6 @@
         maxScaleInput.disabled = isBusy;
         samplePixelsInput.disabled = isBusy;
         randomSeedInput.disabled = isBusy;
-        resetButton.disabled = isBusy;
         inputDropZone.classList.toggle("drag-disabled", isBusy);
       }
 
