@@ -1,0 +1,1857 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <title>Decorrelation Stretch 画像補正ツール</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f4f5f7;
+        --panel: #ffffff;
+        --text: #1f2937;
+        --muted: #6b7280;
+        --accent: #2563eb;
+        --warning: #92400e;
+        --error: #991b1b;
+        --border: #d1d5db;
+        --shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+      }
+
+      .shell {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      header,
+      section,
+      footer {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: var(--shadow);
+      }
+
+      header,
+      footer {
+        padding: 20px;
+      }
+
+      header h1,
+      section h2,
+      section h3 {
+        margin: 0;
+        font-weight: 700;
+      }
+
+      header p,
+      footer p {
+        margin: 8px 0 0;
+      }
+
+      .lead {
+        color: var(--muted);
+      }
+
+      .notice {
+        margin-top: 16px;
+        padding: 12px 14px;
+        border-radius: 8px;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        color: #1d4ed8;
+      }
+
+      .warning {
+        margin-top: 12px;
+        padding: 12px 14px;
+        border-radius: 8px;
+        background: #fffbeb;
+        border: 1px solid #fcd34d;
+        color: var(--warning);
+      }
+
+      .hint {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .layout {
+        display: grid;
+        gap: 16px;
+        margin-top: 16px;
+      }
+
+      .controls {
+        padding: 20px;
+      }
+
+      .control-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .control-grid label {
+        display: grid;
+        gap: 6px;
+        font-size: 14px;
+        color: var(--text);
+      }
+
+      input[type="number"],
+      select,
+      button {
+        width: 100%;
+        min-height: 42px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        font: inherit;
+      }
+
+      input[type="number"],
+      select {
+        padding: 9px 12px;
+        background: #fff;
+        color: var(--text);
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      button {
+        cursor: pointer;
+        padding: 10px 12px;
+        font-weight: 600;
+        background: #fff;
+        color: var(--text);
+      }
+
+      button.primary {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+
+      .status {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 12px;
+        align-items: center;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .status strong {
+        color: var(--text);
+      }
+
+      .progress-wrap {
+        width: 100%;
+        height: 8px;
+        border-radius: 999px;
+        background: #e5e7eb;
+        overflow: hidden;
+      }
+
+      .status-message {
+        grid-column: 1 / -1;
+      }
+
+      .progress-bar {
+        width: 0;
+        height: 100%;
+        background: var(--accent);
+        transition: width 120ms ease;
+      }
+
+      .panes {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .pane,
+      .log-panel {
+        padding: 16px;
+      }
+
+      .canvas-frame {
+        position: relative;
+        margin-top: 12px;
+        min-height: 240px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: #f8fafc;
+        display: grid;
+        place-items: center;
+        overflow: auto;
+        transition: border-color 120ms ease, background 120ms ease;
+      }
+
+      .canvas-stage {
+        position: relative;
+        display: inline-block;
+        line-height: 0;
+        max-width: 100%;
+      }
+
+      .drop-target {
+        border-style: dashed;
+      }
+
+      .drop-target.drag-active {
+        border-color: var(--accent);
+        background: #eff6ff;
+      }
+
+      .drag-export {
+        cursor: grab;
+      }
+
+      .drag-export.drag-disabled {
+        cursor: default;
+      }
+
+      canvas {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        background: #fff;
+      }
+
+      .selection-overlay {
+        position: absolute;
+        inset: 0;
+        background: transparent;
+        cursor: crosshair;
+      }
+
+      .selection-overlay.has-selection {
+        cursor: move;
+      }
+
+      .selection-overlay.is-drawing {
+        cursor: crosshair;
+      }
+
+      .meta {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .log-panel pre {
+        margin: 12px 0 0;
+        padding: 14px;
+        min-height: 200px;
+        max-height: 360px;
+        overflow: auto;
+        border-radius: 8px;
+        background: #111827;
+        color: #e5e7eb;
+        font-size: 12px;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .error-text {
+        color: var(--error);
+        font-weight: 600;
+      }
+
+      footer {
+        margin-top: 16px;
+      }
+
+      @media (max-width: 980px) {
+        .control-grid,
+        .actions,
+        .panes {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header>
+        <h1>Decorrelation Stretch 画像補正ツール</h1>
+        <p class="lead">微妙な色差を強調するための表示補助ツールです。</p>
+        <div class="notice">
+          この補正は、原画像に含まれる微妙な色差を強調するための表示補助です。補正後画像だけで確定判断せず、必ず原画像と比較してください。
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="controls">
+          <h2>操作パネル</h2>
+          <input id="fileInput" type="file" accept="image/*" hidden>
+          <div class="control-grid">
+            <label>
+              プリセット
+              <select id="presetSelect"></select>
+            </label>
+            <label>
+              乱数シード
+              <input id="randomSeed" type="number" step="1" value="0">
+            </label>
+            <label>
+              共分散推定に使う最大画素数
+              <input id="samplePixels" type="number" step="1" value="250000">
+            </label>
+          </div>
+          <div id="inputDropHint" class="hint">
+            原画像エリアをクリックすると画像を選択できます。ドラッグアンドドロップでも読み込めます。
+          </div>
+
+          <div class="control-grid">
+            <label>
+              色差強調の目標標準偏差
+              <input id="targetStd" type="number" step="0.1" value="55">
+            </label>
+            <label>
+              出力下限パーセンタイル
+              <input id="lowPercentile" type="number" step="0.1" value="1">
+            </label>
+            <label>
+              出力上限パーセンタイル
+              <input id="highPercentile" type="number" step="0.1" value="99">
+            </label>
+            <label>
+              主成分ごとの倍率上限
+              <input id="maxScale" type="number" step="0.1" value="8">
+            </label>
+          </div>
+
+          <div class="actions">
+            <button id="runButton" class="primary">補正実行</button>
+            <button id="resetButton">原画像に戻す</button>
+            <button id="savePngButton">PNG保存</button>
+            <button id="saveJsonButton">パラメータJSON保存</button>
+          </div>
+
+          <div class="status">
+            <div>
+              <strong>状態:</strong> <span id="statusText">待機中</span>
+            </div>
+            <div class="progress-wrap" aria-hidden="true">
+              <div id="progressBar" class="progress-bar"></div>
+            </div>
+            <div id="errorText" class="error-text status-message" role="alert">
+            </div>
+          </div>
+        </section>
+
+        <section class="panes">
+          <div class="pane">
+            <h2>原画像</h2>
+            <div id="inputDropZone" class="canvas-frame drop-target">
+              <div class="canvas-stage">
+                <canvas id="originalCanvas"></canvas>
+                <canvas
+                  id="selectionOverlay"
+                  class="selection-overlay"
+                ></canvas>
+              </div>
+            </div>
+            <div id="originalMeta" class="meta">画像未選択</div>
+            <div class="hint">
+              ドラッグで矩形選択、選択枠のドラッグで移動、クリックで解除できます。
+            </div>
+          </div>
+          <div class="pane">
+            <h2>補正後</h2>
+            <div
+              id="resultDragZone"
+              class="canvas-frame drag-export drag-disabled"
+            >
+              <canvas id="resultCanvas" draggable="false"></canvas>
+            </div>
+            <div id="resultMeta" class="meta">未処理</div>
+            <div class="hint">
+              補正後画像は外部へドラッグしてPNG保存できます。
+            </div>
+          </div>
+        </section>
+
+        <section class="log-panel">
+          <h2>処理ログ</h2>
+          <pre id="logOutput"></pre>
+        </section>
+      </main>
+
+      <footer>
+        <p>
+          補正画像は判読補助用であり、原画像の代替証拠ではありません。原画像と処理条件を併記して扱ってください。
+        </p>
+      </footer>
+    </div>
+
+    <script>
+      const APP_VERSION = "0.1.0";
+      const PRESETS = {
+        "色差強調 弱": {
+          targetStd: 40,
+          lowPercentile: 1.0,
+          highPercentile: 99.0,
+          maxScale: 5,
+          samplePixels: 250000,
+          randomSeed: 0,
+        },
+        "色差強調 中": {
+          targetStd: 55,
+          lowPercentile: 1.0,
+          highPercentile: 99.0,
+          maxScale: 8,
+          samplePixels: 250000,
+          randomSeed: 0,
+        },
+        "色差強調 強": {
+          targetStd: 70,
+          lowPercentile: 0.5,
+          highPercentile: 99.5,
+          maxScale: 10,
+          samplePixels: 250000,
+          randomSeed: 0,
+        },
+        "かなり強い": {
+          targetStd: 85,
+          lowPercentile: 0.5,
+          highPercentile: 99.5,
+          maxScale: 12,
+          samplePixels: 250000,
+          randomSeed: 0,
+        },
+      };
+
+      let originalImageData = null;
+      let originalFileName = "";
+      let resultImageData = null;
+      let lastMetadata = null;
+      let currentWorker = null;
+
+      const fileInput = document.getElementById("fileInput");
+      const presetSelect = document.getElementById("presetSelect");
+      const targetStdInput = document.getElementById("targetStd");
+      const lowPercentileInput = document.getElementById(
+        "lowPercentile",
+      );
+      const highPercentileInput = document.getElementById(
+        "highPercentile",
+      );
+      const maxScaleInput = document.getElementById("maxScale");
+      const samplePixelsInput = document.getElementById("samplePixels");
+      const randomSeedInput = document.getElementById("randomSeed");
+      const runButton = document.getElementById("runButton");
+      const resetButton = document.getElementById("resetButton");
+      const savePngButton = document.getElementById("savePngButton");
+      const saveJsonButton = document.getElementById("saveJsonButton");
+      const originalCanvas = document.getElementById("originalCanvas");
+      const selectionOverlay = document.getElementById(
+        "selectionOverlay",
+      );
+      const resultCanvas = document.getElementById("resultCanvas");
+      const inputDropZone = document.getElementById("inputDropZone");
+      const resultDragZone = document.getElementById("resultDragZone");
+      const originalMeta = document.getElementById("originalMeta");
+      const resultMeta = document.getElementById("resultMeta");
+      const logOutput = document.getElementById("logOutput");
+      const statusText = document.getElementById("statusText");
+      const progressBar = document.getElementById("progressBar");
+      const errorText = document.getElementById("errorText");
+      let resultDragUrl = "";
+      let resultDragFileName = "";
+      let selectionRect = null;
+      let selectionInteraction = null;
+
+      function init() {
+        Object.keys(PRESETS).forEach((name) => {
+          const option = document.createElement("option");
+          option.value = name;
+          option.textContent = name;
+          presetSelect.appendChild(option);
+        });
+
+        presetSelect.value = "色差強調 中";
+        setPreset(presetSelect.value);
+
+        presetSelect.addEventListener(
+          "change",
+          () => setPreset(presetSelect.value),
+        );
+        fileInput.addEventListener("change", async (event) => {
+          const file = event.target.files && event.target.files[0];
+          if (!file) {
+            return;
+          }
+
+          try {
+            clearError();
+            await loadImageFile(file);
+          } catch (error) {
+            showError(
+              "画像読み込みに失敗しました: " +
+                String(error && error.message ? error.message : error),
+            );
+            log("画像読み込みに失敗");
+          }
+        });
+        runButton.addEventListener("click", runProcessing);
+        resetButton.addEventListener("click", resetResultToOriginal);
+        savePngButton.addEventListener("click", saveResultPng);
+        saveJsonButton.addEventListener("click", saveMetadataJson);
+        initDragAndDrop();
+        initSelectionOverlay();
+
+        savePngButton.disabled = true;
+        saveJsonButton.disabled = true;
+        updateResultDragExportState();
+        log("アプリを初期化しました。画像を選択してください。");
+      }
+
+      function initDragAndDrop() {
+        inputDropZone.addEventListener("click", (event) => {
+          if (originalImageData && event.target === selectionOverlay) {
+            return;
+          }
+          if (runButton.disabled) {
+            return;
+          }
+          fileInput.click();
+        });
+
+        ["dragenter", "dragover"].forEach((type) => {
+          inputDropZone.addEventListener(type, (event) => {
+            event.preventDefault();
+            inputDropZone.classList.add("drag-active");
+          });
+        });
+
+        ["dragleave", "dragend", "drop"].forEach((type) => {
+          inputDropZone.addEventListener(type, () => {
+            inputDropZone.classList.remove("drag-active");
+          });
+        });
+
+        inputDropZone.addEventListener("drop", async (event) => {
+          event.preventDefault();
+          if (runButton.disabled) {
+            return;
+          }
+
+          const file = pickFirstImageFile(event.dataTransfer);
+          if (!file) {
+            showError("画像ファイルをドロップしてください。");
+            return;
+          }
+
+          try {
+            clearError();
+            await loadImageFile(file);
+          } catch (error) {
+            showError(
+              "画像読み込みに失敗しました: " +
+                String(error && error.message ? error.message : error),
+            );
+          }
+        });
+
+        resultDragZone.addEventListener("dragstart", (event) => {
+          if (
+            !resultDragUrl || !resultDragFileName || !event.dataTransfer
+          ) {
+            event.preventDefault();
+            return;
+          }
+
+          // 補正後画像を外部へドラッグ保存できるよう、ブラウザが理解するDownloadURLを渡す。
+          // ドラッグ開始時にその場でtoBlobすると非同期で間に合わないため、結果更新時に事前生成しておく。
+          event.dataTransfer.effectAllowed = "copy";
+          event.dataTransfer.setData(
+            "DownloadURL",
+            "image/png:" + resultDragFileName + ":" + resultDragUrl,
+          );
+          event.dataTransfer.setData("text/uri-list", resultDragUrl);
+        });
+      }
+
+      function initSelectionOverlay() {
+        selectionOverlay.addEventListener(
+          "pointerdown",
+          handleSelectionPointerDown,
+        );
+        selectionOverlay.addEventListener(
+          "pointermove",
+          handleSelectionPointerMove,
+        );
+        selectionOverlay.addEventListener(
+          "pointerup",
+          handleSelectionPointerUp,
+        );
+        selectionOverlay.addEventListener(
+          "pointercancel",
+          handleSelectionPointerUp,
+        );
+      }
+
+      function pickFirstImageFile(dataTransfer) {
+        if (
+          !dataTransfer || !dataTransfer.files ||
+          dataTransfer.files.length === 0
+        ) {
+          return null;
+        }
+
+        for (const file of dataTransfer.files) {
+          if (
+            file && typeof file.type === "string" &&
+            file.type.startsWith("image/")
+          ) {
+            return file;
+          }
+        }
+
+        return null;
+      }
+
+      function setPreset(name) {
+        const preset = PRESETS[name];
+        if (!preset) {
+          return;
+        }
+
+        targetStdInput.value = preset.targetStd;
+        lowPercentileInput.value = preset.lowPercentile;
+        highPercentileInput.value = preset.highPercentile;
+        maxScaleInput.value = preset.maxScale;
+        samplePixelsInput.value = preset.samplePixels;
+        randomSeedInput.value = preset.randomSeed;
+        log("プリセットを反映: " + name);
+      }
+
+      function readParams() {
+        return {
+          targetStd: Number(targetStdInput.value),
+          lowPercentile: Number(lowPercentileInput.value),
+          highPercentile: Number(highPercentileInput.value),
+          maxScale: Number(maxScaleInput.value),
+          samplePixels: Number(samplePixelsInput.value),
+          randomSeed: Number(randomSeedInput.value),
+        };
+      }
+
+      function validateParams(params) {
+        if (!(params.targetStd > 0)) {
+          return "targetStd は 0 より大きい必要があります。";
+        }
+
+        if (
+          !(params.lowPercentile >= 0 &&
+            params.lowPercentile < params.highPercentile &&
+            params.highPercentile <= 100)
+        ) {
+          return "lowPercentile / highPercentile の大小関係が不正です。";
+        }
+
+        if (!(params.maxScale > 0)) {
+          return "maxScale は 0 より大きい必要があります。";
+        }
+
+        if (
+          !(Number.isInteger(params.samplePixels) &&
+            params.samplePixels >= 0)
+        ) {
+          return "samplePixels は 0 以上の整数である必要があります。";
+        }
+
+        if (!Number.isInteger(params.randomSeed)) {
+          return "randomSeed は整数である必要があります。";
+        }
+
+        return "";
+      }
+
+      async function loadImageFile(file) {
+        originalFileName = file.name || "image";
+        const bitmap = await createImageBitmap(file);
+        drawOriginalImage(bitmap);
+        bitmap.close();
+        clearSelection();
+        resultCanvas.width = 0;
+        resultCanvas.height = 0;
+        resultImageData = null;
+        lastMetadata = null;
+        revokeResultDragUrl();
+        resultMeta.textContent = "未処理";
+        savePngButton.disabled = true;
+        saveJsonButton.disabled = true;
+        updateResultDragExportState();
+        originalMeta.textContent = buildOriginalMetaText();
+        statusText.textContent = "画像読み込み完了";
+        progressBar.style.width = "0%";
+        log("画像を読み込みました: " + originalFileName);
+        log(
+          "画像サイズ: " + originalImageData.width + " x " +
+            originalImageData.height,
+        );
+      }
+
+      function drawOriginalImage(bitmap) {
+        const context = originalCanvas.getContext("2d", {
+          willReadFrequently: true,
+        });
+        originalCanvas.width = bitmap.width;
+        originalCanvas.height = bitmap.height;
+        context.clearRect(0, 0, bitmap.width, bitmap.height);
+        context.drawImage(bitmap, 0, 0);
+
+        try {
+          originalImageData = context.getImageData(
+            0,
+            0,
+            bitmap.width,
+            bitmap.height,
+          );
+          selectionOverlay.width = bitmap.width;
+          selectionOverlay.height = bitmap.height;
+          drawSelectionOverlay();
+        } catch (error) {
+          throw new Error("Canvas の ImageData 取得に失敗しました。");
+        }
+      }
+
+      function runProcessing() {
+        clearError();
+
+        if (!originalImageData) {
+          showError("画像が選択されていません。");
+          return;
+        }
+
+        const params = readParams();
+        const validationError = validateParams(params);
+        if (validationError) {
+          showError("パラメータが不正です: " + validationError);
+          return;
+        }
+
+        if (currentWorker) {
+          currentWorker.terminate();
+          currentWorker = null;
+        }
+
+        log("補正処理を開始します。");
+        logJson({ params, region: getEffectiveRegion() });
+
+        const worker = createInlineWorker();
+        currentWorker = worker;
+        worker.onmessage = handleWorkerMessage;
+        worker.onerror = (event) => {
+          setBusy(false);
+          showError(
+            "Worker 処理中に例外が発生しました: " + event.message,
+          );
+          log("Worker エラー: " + event.message);
+          worker.terminate();
+          currentWorker = null;
+        };
+
+        // 元のImageDataを直接Transferするとメインスレッド側で原画像参照を失う。
+        // 比較表示と再実行の再現性を保つため、ここでは必ずコピーを送る。
+        const inputCopy = new Uint8ClampedArray(originalImageData.data);
+        setBusy(true);
+        statusText.textContent = "Worker へ送信中";
+        progressBar.style.width = "2%";
+        worker.postMessage({
+          type: "process",
+          width: originalImageData.width,
+          height: originalImageData.height,
+          buffer: inputCopy.buffer,
+          params,
+          region: getEffectiveRegion(),
+        }, [inputCopy.buffer]);
+      }
+
+      function createInlineWorker() {
+        // 全画素処理をメインスレッドで走らせると、高解像度画像でUI操作が止まる。
+        // そのためWorkerへ隔離して、進捗表示と保存操作の応答性を残す。
+        const workerSource =
+          document.getElementById("worker-source").textContent;
+        const workerBlob = new Blob([workerSource], {
+          type: "text/javascript",
+        });
+        const workerUrl = URL.createObjectURL(workerBlob);
+        const worker = new Worker(workerUrl);
+        URL.revokeObjectURL(workerUrl);
+        return worker;
+      }
+
+      function handleWorkerMessage(event) {
+        const message = event.data;
+
+        if (!message || !message.type) {
+          return;
+        }
+
+        if (message.type === "progress") {
+          statusText.textContent = message.message || "処理中";
+          progressBar.style.width =
+            Math.max(0, Math.min(100, Number(message.percent) || 0)) +
+            "%";
+          log("進捗: " + (message.message || ""));
+          return;
+        }
+
+        if (message.type === "error") {
+          setBusy(false);
+          showError("Worker 処理に失敗しました: " + message.message);
+          log("Worker 処理失敗: " + message.message);
+          if (currentWorker) {
+            currentWorker.terminate();
+            currentWorker = null;
+          }
+          return;
+        }
+
+        if (message.type === "done") {
+          drawResultImage(
+            message.width,
+            message.height,
+            message.buffer,
+          );
+          lastMetadata = message.metadata || null;
+          if (lastMetadata) {
+            lastMetadata.sourceFileName = originalFileName;
+            lastMetadata.userAgent = navigator.userAgent;
+          }
+          savePngButton.disabled = false;
+          saveJsonButton.disabled = false;
+          statusText.textContent = "完了";
+          progressBar.style.width = "100%";
+          resultMeta.textContent = "補正後画像: " + message.width +
+            " x " + message.height;
+          log("補正処理が完了しました。");
+          if (lastMetadata) {
+            logJson(lastMetadata);
+          }
+          setBusy(false);
+          if (currentWorker) {
+            currentWorker.terminate();
+            currentWorker = null;
+          }
+        }
+      }
+
+      function drawResultImage(width, height, buffer) {
+        const resultData = new Uint8ClampedArray(buffer);
+        const imageData = new ImageData(resultData, width, height);
+        const context = resultCanvas.getContext("2d");
+        resultCanvas.width = width;
+        resultCanvas.height = height;
+        context.putImageData(imageData, 0, 0);
+        resultImageData = imageData;
+        updateResultDragExportBlob();
+      }
+
+      function getEffectiveRegion() {
+        if (!selectionRect) {
+          return {
+            x: 0,
+            y: 0,
+            width: originalImageData ? originalImageData.width : 0,
+            height: originalImageData ? originalImageData.height : 0,
+          };
+        }
+
+        return {
+          x: selectionRect.x,
+          y: selectionRect.y,
+          width: selectionRect.width,
+          height: selectionRect.height,
+        };
+      }
+
+      function handleSelectionPointerDown(event) {
+        if (!originalImageData || runButton.disabled) {
+          return;
+        }
+
+        const point = getCanvasPointFromEvent(event);
+        if (!point) {
+          return;
+        }
+
+        event.preventDefault();
+        selectionOverlay.setPointerCapture(event.pointerId);
+        const hit = selectionRect && pointInRect(point, selectionRect);
+        selectionInteraction = hit
+          ? {
+            mode: "move",
+            pointerId: event.pointerId,
+            startPoint: point,
+            startRect: { ...selectionRect },
+            moved: false,
+          }
+          : {
+            mode: "draw",
+            pointerId: event.pointerId,
+            startPoint: point,
+            currentPoint: point,
+            moved: false,
+          };
+        selectionOverlay.classList.toggle(
+          "is-drawing",
+          selectionInteraction.mode === "draw",
+        );
+      }
+
+      function handleSelectionPointerMove(event) {
+        if (
+          !selectionInteraction ||
+          selectionInteraction.pointerId !== event.pointerId
+        ) {
+          return;
+        }
+
+        const point = getCanvasPointFromEvent(event);
+        if (!point) {
+          return;
+        }
+
+        event.preventDefault();
+        if (selectionInteraction.mode === "draw") {
+          selectionInteraction.currentPoint = point;
+          selectionInteraction.moved = selectionInteraction.moved ||
+            hasMovement(selectionInteraction.startPoint, point);
+          selectionRect = normalizeRect(
+            selectionInteraction.startPoint,
+            point,
+          );
+          if (selectionRect.width < 2 || selectionRect.height < 2) {
+            selectionRect = null;
+          }
+        } else {
+          const dx = point.x - selectionInteraction.startPoint.x;
+          const dy = point.y - selectionInteraction.startPoint.y;
+          selectionInteraction.moved = selectionInteraction.moved ||
+            Math.abs(dx) > 1 || Math.abs(dy) > 1;
+          selectionRect = clampRectToCanvas({
+            x: Math.round(selectionInteraction.startRect.x + dx),
+            y: Math.round(selectionInteraction.startRect.y + dy),
+            width: selectionInteraction.startRect.width,
+            height: selectionInteraction.startRect.height,
+          });
+        }
+
+        drawSelectionOverlay();
+      }
+
+      function handleSelectionPointerUp(event) {
+        if (
+          !selectionInteraction ||
+          selectionInteraction.pointerId !== event.pointerId
+        ) {
+          return;
+        }
+
+        event.preventDefault();
+        selectionOverlay.releasePointerCapture(event.pointerId);
+
+        if (
+          selectionInteraction.mode === "move" &&
+          !selectionInteraction.moved
+        ) {
+          clearSelection();
+          originalMeta.textContent = buildOriginalMetaText();
+        } else if (
+          selectionInteraction.mode === "draw" &&
+          !selectionInteraction.moved
+        ) {
+          clearSelection();
+          originalMeta.textContent = buildOriginalMetaText();
+        } else {
+          selectionRect = sanitizeSelectionRect(selectionRect);
+          originalMeta.textContent = buildOriginalMetaText();
+          drawSelectionOverlay();
+        }
+
+        selectionInteraction = null;
+        selectionOverlay.classList.remove("is-drawing");
+      }
+
+      function getCanvasPointFromEvent(event) {
+        if (
+          !originalImageData || originalCanvas.width === 0 ||
+          originalCanvas.height === 0
+        ) {
+          return null;
+        }
+
+        const rect = selectionOverlay.getBoundingClientRect();
+        if (!rect.width || !rect.height) {
+          return null;
+        }
+
+        const scaleX = originalCanvas.width / rect.width;
+        const scaleY = originalCanvas.height / rect.height;
+        const x = Math.max(
+          0,
+          Math.min(
+            originalCanvas.width,
+            Math.round((event.clientX - rect.left) * scaleX),
+          ),
+        );
+        const y = Math.max(
+          0,
+          Math.min(
+            originalCanvas.height,
+            Math.round((event.clientY - rect.top) * scaleY),
+          ),
+        );
+        return { x, y };
+      }
+
+      function drawSelectionOverlay() {
+        const context = selectionOverlay.getContext("2d");
+        context.clearRect(
+          0,
+          0,
+          selectionOverlay.width,
+          selectionOverlay.height,
+        );
+
+        selectionOverlay.classList.toggle(
+          "has-selection",
+          Boolean(selectionRect),
+        );
+
+        if (!selectionRect) {
+          return;
+        }
+
+        context.fillStyle = "rgba(37, 99, 235, 0.14)";
+        context.strokeStyle = "rgba(37, 99, 235, 0.95)";
+        context.lineWidth = 2;
+        context.setLineDash([8, 6]);
+        context.fillRect(
+          selectionRect.x,
+          selectionRect.y,
+          selectionRect.width,
+          selectionRect.height,
+        );
+        context.strokeRect(
+          selectionRect.x,
+          selectionRect.y,
+          selectionRect.width,
+          selectionRect.height,
+        );
+        context.setLineDash([]);
+      }
+
+      function clearSelection() {
+        selectionRect = null;
+        drawSelectionOverlay();
+      }
+
+      function buildOriginalMetaText() {
+        const base = "ファイル: " + originalFileName + " / " +
+          originalImageData.width + " x " + originalImageData.height;
+        if (!selectionRect) {
+          return base + " / 補正範囲: 全体";
+        }
+        return base + " / 補正範囲: x=" + selectionRect.x + ", y=" +
+          selectionRect.y + ", w=" + selectionRect.width + ", h=" +
+          selectionRect.height;
+      }
+
+      function pointInRect(point, rect) {
+        return point.x >= rect.x && point.x <= rect.x + rect.width &&
+          point.y >= rect.y && point.y <= rect.y + rect.height;
+      }
+
+      function hasMovement(startPoint, endPoint) {
+        return Math.abs(startPoint.x - endPoint.x) > 2 ||
+          Math.abs(startPoint.y - endPoint.y) > 2;
+      }
+
+      function normalizeRect(startPoint, endPoint) {
+        const x1 = Math.min(startPoint.x, endPoint.x);
+        const y1 = Math.min(startPoint.y, endPoint.y);
+        const x2 = Math.max(startPoint.x, endPoint.x);
+        const y2 = Math.max(startPoint.y, endPoint.y);
+        return sanitizeSelectionRect({
+          x: x1,
+          y: y1,
+          width: x2 - x1,
+          height: y2 - y1,
+        });
+      }
+
+      function clampRectToCanvas(rect) {
+        const width = Math.min(rect.width, originalCanvas.width);
+        const height = Math.min(rect.height, originalCanvas.height);
+        const x = Math.max(
+          0,
+          Math.min(originalCanvas.width - width, rect.x),
+        );
+        const y = Math.max(
+          0,
+          Math.min(originalCanvas.height - height, rect.y),
+        );
+        return sanitizeSelectionRect({ x, y, width, height });
+      }
+
+      function sanitizeSelectionRect(rect) {
+        if (!rect) {
+          return null;
+        }
+
+        const x = Math.max(
+          0,
+          Math.min(originalCanvas.width - 1, Math.round(rect.x)),
+        );
+        const y = Math.max(
+          0,
+          Math.min(originalCanvas.height - 1, Math.round(rect.y)),
+        );
+        const width = Math.max(
+          0,
+          Math.min(originalCanvas.width - x, Math.round(rect.width)),
+        );
+        const height = Math.max(
+          0,
+          Math.min(originalCanvas.height - y, Math.round(rect.height)),
+        );
+        if (width < 2 || height < 2) {
+          return null;
+        }
+        return { x, y, width, height };
+      }
+
+      function resetResultToOriginal() {
+        clearError();
+
+        if (!originalImageData) {
+          showError("画像が選択されていません。");
+          return;
+        }
+
+        const context = resultCanvas.getContext("2d");
+        resultCanvas.width = originalImageData.width;
+        resultCanvas.height = originalImageData.height;
+        context.putImageData(originalImageData, 0, 0);
+        resultImageData = new ImageData(
+          new Uint8ClampedArray(originalImageData.data),
+          originalImageData.width,
+          originalImageData.height,
+        );
+        resultMeta.textContent = "原画像を表示中";
+        statusText.textContent = "原画像に戻しました";
+        progressBar.style.width = "0%";
+        log("補正後表示を原画像に戻しました。");
+        savePngButton.disabled = false;
+        saveJsonButton.disabled = !lastMetadata;
+        updateResultDragExportBlob();
+      }
+
+      function saveResultPng() {
+        if (
+          !resultImageData || resultCanvas.width === 0 ||
+          resultCanvas.height === 0
+        ) {
+          showError("保存対象がありません。");
+          return;
+        }
+
+        // 強調後の微細な色差を保持したいので、初期版では非可逆JPEGではなくPNGを保存する。
+        resultCanvas.toBlob((blob) => {
+          if (!blob) {
+            showError("PNG 保存に失敗しました。");
+            return;
+          }
+          downloadBlob(
+            blob,
+            makeOutputFileName(
+              originalFileName,
+              "decorrelation",
+              "png",
+            ),
+          );
+        }, "image/png");
+      }
+
+      function saveMetadataJson() {
+        if (!lastMetadata) {
+          showError("保存対象がありません。");
+          return;
+        }
+
+        const blob = new Blob([JSON.stringify(lastMetadata, null, 2)], {
+          type: "application/json",
+        });
+        downloadBlob(
+          blob,
+          makeOutputFileName(
+            originalFileName,
+            "decorrelation-params",
+            "json",
+          ),
+        );
+      }
+
+      function downloadBlob(blob, fileName) {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = fileName;
+        anchor.click();
+        URL.revokeObjectURL(url);
+        log("保存しました: " + fileName);
+      }
+
+      function updateResultDragExportBlob() {
+        if (
+          !resultImageData || resultCanvas.width === 0 ||
+          resultCanvas.height === 0
+        ) {
+          revokeResultDragUrl();
+          updateResultDragExportState();
+          return;
+        }
+
+        resultCanvas.toBlob((blob) => {
+          if (!blob) {
+            revokeResultDragUrl();
+            updateResultDragExportState();
+            return;
+          }
+
+          revokeResultDragUrl();
+          resultDragUrl = URL.createObjectURL(blob);
+          resultDragFileName = makeOutputFileName(
+            originalFileName,
+            "decorrelation",
+            "png",
+          );
+          updateResultDragExportState();
+        }, "image/png");
+      }
+
+      function updateResultDragExportState() {
+        const enabled = Boolean(resultDragUrl && resultImageData);
+        resultDragZone.draggable = enabled;
+        resultCanvas.draggable = enabled;
+        resultDragZone.classList.toggle("drag-disabled", !enabled);
+        resultMeta.textContent = enabled
+          ? (resultMeta.textContent.replace(
+            / ?\/ ドラッグ保存可$/,
+            "",
+          ) + " / ドラッグ保存可")
+          : resultMeta.textContent.replace(/ ?\/ ドラッグ保存可$/, "");
+      }
+
+      function revokeResultDragUrl() {
+        if (resultDragUrl) {
+          URL.revokeObjectURL(resultDragUrl);
+        }
+        resultDragUrl = "";
+        resultDragFileName = "";
+      }
+
+      function makeOutputFileName(sourceFileName, suffix, extension) {
+        const dotIndex = sourceFileName.lastIndexOf(".");
+        const baseName = dotIndex > 0
+          ? sourceFileName.slice(0, dotIndex)
+          : (sourceFileName || "image");
+        return baseName + "-" + suffix + "." + extension;
+      }
+
+      function log(message) {
+        const prefix = new Date().toLocaleTimeString("ja-JP", {
+          hour12: false,
+        });
+        logOutput.textContent += "[" + prefix + "] " + message + "\n";
+        logOutput.scrollTop = logOutput.scrollHeight;
+      }
+
+      function logJson(object) {
+        logOutput.textContent += JSON.stringify(object, null, 2) + "\n";
+        logOutput.scrollTop = logOutput.scrollHeight;
+      }
+
+      function setBusy(isBusy) {
+        runButton.disabled = isBusy;
+        fileInput.disabled = isBusy;
+        presetSelect.disabled = isBusy;
+        targetStdInput.disabled = isBusy;
+        lowPercentileInput.disabled = isBusy;
+        highPercentileInput.disabled = isBusy;
+        maxScaleInput.disabled = isBusy;
+        samplePixelsInput.disabled = isBusy;
+        randomSeedInput.disabled = isBusy;
+        resetButton.disabled = isBusy;
+        inputDropZone.classList.toggle("drag-disabled", isBusy);
+      }
+
+      function showError(message) {
+        errorText.textContent = message;
+        statusText.textContent = "エラー";
+        log(message);
+      }
+
+      function clearError() {
+        errorText.textContent = "";
+      }
+
+      init();
+    </script>
+
+    <script type="text/plain" id="worker-source">
+      self.onmessage = function (event) {
+        const message = event.data;
+        if (!message || message.type !== "process") {
+          return;
+        }
+
+        try {
+          const rgba = new Uint8ClampedArray(message.buffer);
+          const result = processImage(
+            message.width,
+            message.height,
+            rgba,
+            message.params,
+            message.region,
+          );
+          self.postMessage({
+            type: "done",
+            width: message.width,
+            height: message.height,
+            buffer: result.buffer,
+            metadata: result.metadata,
+          }, [result.buffer]);
+        } catch (error) {
+          self.postMessage({
+            type: "error",
+            message: String(
+              error && error.message ? error.message : error,
+            ),
+          });
+        }
+      };
+
+      function processImage(width, height, rgba, params, regionInput) {
+        const region = sanitizeRegion(width, height, regionInput);
+        const pixelCount = region.width * region.height;
+        postProgress("画像統計を計算中", 10);
+
+        // A成分は通常255であり、色差強調の主対象ではない。
+        // RGBだけで色のばらつきを扱い、元のAは最終出力へそのまま戻す。
+        const mean = computeMean(rgba, width, height, params, region);
+        const covariance = computeCovariance(
+          rgba,
+          width,
+          height,
+          mean,
+          params,
+          region,
+        );
+
+        postProgress("固有値分解中", 30);
+        // 平均と共分散は色の分布中心と広がりを表す。
+        // 固有値分解により「色差が大きい方向」と「小さい方向」を主成分として分離できる。
+        const eig = eigenSymmetric3x3(covariance);
+        sortEigenPairs(eig.values, eig.vectors);
+
+        postProgress("色差強調を適用中", 50);
+        const transformed = applyTransformAndStoreRestored(
+          rgba,
+          width,
+          height,
+          mean,
+          eig,
+          params,
+          region,
+        );
+
+        postProgress("出力レンジを計算中", 75);
+        // min/maxだけで正規化すると外れ値1画素に全体レンジを奪われやすい。
+        // percentileを使って実用上の表示レンジを安定させる。
+        const ranges = computePercentiles(
+          transformed.restored,
+          pixelCount,
+          params.lowPercentile,
+          params.highPercentile,
+        );
+        const outRgba = normalizeToRgba(
+          transformed.restored,
+          rgba,
+          width,
+          height,
+          region,
+          ranges.lowRgb,
+          ranges.highRgb,
+        );
+
+        const metadata = {
+          algorithm: "whole_image_decorrelation_stretch",
+          appVersion: "0.1.0",
+          createdAt: new Date().toISOString(),
+          sourceFileName: "",
+          width: width,
+          height: height,
+          region: region,
+          params: {
+            targetStd: params.targetStd,
+            lowPercentile: params.lowPercentile,
+            highPercentile: params.highPercentile,
+            maxScale: params.maxScale,
+            samplePixels: params.samplePixels,
+            randomSeed: params.randomSeed,
+          },
+          meanRgb: mean,
+          covarianceRgb: covariance,
+          eigenvalues: eig.values.slice(),
+          eigenvectors: [
+            eig.vectors[0].slice(),
+            eig.vectors[1].slice(),
+            eig.vectors[2].slice(),
+          ],
+          rawScales: transformed.rawScales.slice(),
+          appliedScales: transformed.appliedScales.slice(),
+          lowRgb: ranges.lowRgb.slice(),
+          highRgb: ranges.highRgb.slice(),
+          note:
+            "This output is an enhanced visualization derived from the original image. Use it as an inspection aid, not as a replacement for the original evidence image.",
+        };
+
+        postProgress("完了", 100);
+        return {
+          buffer: outRgba.buffer,
+          metadata: metadata,
+        };
+      }
+
+      function createRandom(seed) {
+        return mulberry32((seed >>> 0) || 0);
+      }
+
+      function mulberry32(seed) {
+        return function () {
+          let t = seed += 0x6D2B79F5;
+          t = Math.imul(t ^ (t >>> 15), t | 1);
+          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      function samplePixelIndex(pixelCount, rng) {
+        return Math.floor(rng() * pixelCount);
+      }
+
+      function computeMean(rgba, width, height, params, region) {
+        const pixelCount = region.width * region.height;
+        const useAll = params.samplePixels <= 0;
+        const n = useAll
+          ? pixelCount
+          : Math.min(params.samplePixels, pixelCount);
+        const rng = createRandom(params.randomSeed);
+
+        let sumR = 0;
+        let sumG = 0;
+        let sumB = 0;
+
+        for (let k = 0; k < n; k++) {
+          const p = useAll ? k : samplePixelIndex(pixelCount, rng);
+          const i = regionPixelOffset(region, p, width);
+          sumR += rgba[i];
+          sumG += rgba[i + 1];
+          sumB += rgba[i + 2];
+        }
+
+        return [sumR / n, sumG / n, sumB / n];
+      }
+
+      function computeCovariance(
+        rgba,
+        width,
+        height,
+        mean,
+        params,
+        region,
+      ) {
+        const pixelCount = region.width * region.height;
+        const useAll = params.samplePixels <= 0;
+        const n = useAll
+          ? pixelCount
+          : Math.min(params.samplePixels, pixelCount);
+        const rng = createRandom(params.randomSeed + 1);
+
+        let rr = 0;
+        let rg = 0;
+        let rb = 0;
+        let gg = 0;
+        let gb = 0;
+        let bb = 0;
+
+        for (let k = 0; k < n; k++) {
+          const p = useAll ? k : samplePixelIndex(pixelCount, rng);
+          const i = regionPixelOffset(region, p, width);
+          const r = rgba[i] - mean[0];
+          const g = rgba[i + 1] - mean[1];
+          const b = rgba[i + 2] - mean[2];
+          rr += r * r;
+          rg += r * g;
+          rb += r * b;
+          gg += g * g;
+          gb += g * b;
+          bb += b * b;
+        }
+
+        const denom = Math.max(1, n - 1);
+        return [
+          [rr / denom, rg / denom, rb / denom],
+          [rg / denom, gg / denom, gb / denom],
+          [rb / denom, gb / denom, bb / denom],
+        ];
+      }
+
+      function eigenSymmetric3x3(matrix) {
+        const a = [
+          [matrix[0][0], matrix[0][1], matrix[0][2]],
+          [matrix[1][0], matrix[1][1], matrix[1][2]],
+          [matrix[2][0], matrix[2][1], matrix[2][2]],
+        ];
+        const v = [
+          [1, 0, 0],
+          [0, 1, 0],
+          [0, 0, 1],
+        ];
+        const maxIterations = 50;
+        const epsilon = 1e-10;
+
+        for (let iter = 0; iter < maxIterations; iter++) {
+          let p = 0;
+          let q = 1;
+          let maxOff = Math.abs(a[0][1]);
+
+          const off02 = Math.abs(a[0][2]);
+          const off12 = Math.abs(a[1][2]);
+          if (off02 > maxOff) {
+            maxOff = off02;
+            p = 0;
+            q = 2;
+          }
+          if (off12 > maxOff) {
+            maxOff = off12;
+            p = 1;
+            q = 2;
+          }
+
+          if (maxOff < epsilon) {
+            break;
+          }
+
+          const app = a[p][p];
+          const aqq = a[q][q];
+          const apq = a[p][q];
+          const tau = (aqq - app) / (2 * apq);
+          const t = Math.sign(tau || 1) /
+            (Math.abs(tau) + Math.sqrt(1 + tau * tau));
+          const c = 1 / Math.sqrt(1 + t * t);
+          const s = t * c;
+
+          a[p][p] = app - t * apq;
+          a[q][q] = aqq + t * apq;
+          a[p][q] = 0;
+          a[q][p] = 0;
+
+          for (let r = 0; r < 3; r++) {
+            if (r !== p && r !== q) {
+              const arp = a[r][p];
+              const arq = a[r][q];
+              a[r][p] = c * arp - s * arq;
+              a[p][r] = a[r][p];
+              a[r][q] = s * arp + c * arq;
+              a[q][r] = a[r][q];
+            }
+          }
+
+          for (let r = 0; r < 3; r++) {
+            const vrp = v[r][p];
+            const vrq = v[r][q];
+            v[r][p] = c * vrp - s * vrq;
+            v[r][q] = s * vrp + c * vrq;
+          }
+        }
+
+        return {
+          values: [a[0][0], a[1][1], a[2][2]],
+          vectors: v,
+        };
+      }
+
+      function sortEigenPairs(values, vectors) {
+        const order = [0, 1, 2].sort(function (left, right) {
+          return values[right] - values[left];
+        });
+        const sortedValues = order.map(function (index) {
+          return values[index];
+        });
+        const sortedVectors = [
+          [
+            vectors[0][order[0]],
+            vectors[0][order[1]],
+            vectors[0][order[2]],
+          ],
+          [
+            vectors[1][order[0]],
+            vectors[1][order[1]],
+            vectors[1][order[2]],
+          ],
+          [
+            vectors[2][order[0]],
+            vectors[2][order[1]],
+            vectors[2][order[2]],
+          ],
+        ];
+
+        values[0] = sortedValues[0];
+        values[1] = sortedValues[1];
+        values[2] = sortedValues[2];
+        vectors[0] = sortedVectors[0];
+        vectors[1] = sortedVectors[1];
+        vectors[2] = sortedVectors[2];
+      }
+
+      function applyTransformAndStoreRestored(
+        rgba,
+        width,
+        height,
+        mean,
+        eig,
+        params,
+        region,
+      ) {
+        const pixelCount = region.width * region.height;
+        const restored = new Float32Array(pixelCount * 3);
+        const values = eig.values;
+        const vectors = eig.vectors;
+        const rawScales = [0, 0, 0];
+        const appliedScales = [0, 0, 0];
+
+        for (let idx = 0; idx < 3; idx++) {
+          const safeValue = Math.max(values[idx], 1e-12);
+          rawScales[idx] = params.targetStd / Math.sqrt(safeValue);
+          // 固有値が極端に小さい成分はノイズ方向になりやすい。
+          // 無制限に拡大すると色むらや圧縮ノイズまで増幅するのでmaxScaleで上限を掛ける。
+          appliedScales[idx] = Math.min(
+            rawScales[idx],
+            params.maxScale,
+          );
+        }
+
+        const e00 = vectors[0][0],
+          e01 = vectors[0][1],
+          e02 = vectors[0][2];
+        const e10 = vectors[1][0],
+          e11 = vectors[1][1],
+          e12 = vectors[1][2];
+        const e20 = vectors[2][0],
+          e21 = vectors[2][1],
+          e22 = vectors[2][2];
+
+        for (let p = 0; p < pixelCount; p++) {
+          const i = regionPixelOffset(region, p, width);
+          const j = p * 3;
+          const r = rgba[i] - mean[0];
+          const g = rgba[i + 1] - mean[1];
+          const b = rgba[i + 2] - mean[2];
+
+          const y0 = r * e00 + g * e10 + b * e20;
+          const y1 = r * e01 + g * e11 + b * e21;
+          const y2 = r * e02 + g * e12 + b * e22;
+
+          const y0s = y0 * appliedScales[0];
+          const y1s = y1 * appliedScales[1];
+          const y2s = y2 * appliedScales[2];
+
+          restored[j] = y0s * e00 + y1s * e01 + y2s * e02 + mean[0];
+          restored[j + 1] = y0s * e10 + y1s * e11 + y2s * e12 + mean[1];
+          restored[j + 2] = y0s * e20 + y1s * e21 + y2s * e22 + mean[2];
+        }
+
+        return {
+          restored: restored,
+          rawScales: rawScales,
+          appliedScales: appliedScales,
+        };
+      }
+
+      function computePercentiles(
+        restored,
+        pixelCount,
+        lowPercentile,
+        highPercentile,
+      ) {
+        const reds = new Array(pixelCount);
+        const greens = new Array(pixelCount);
+        const blues = new Array(pixelCount);
+
+        for (let p = 0; p < pixelCount; p++) {
+          const i = p * 3;
+          reds[p] = restored[i];
+          greens[p] = restored[i + 1];
+          blues[p] = restored[i + 2];
+        }
+
+        reds.sort(function (a, b) {
+          return a - b;
+        });
+        greens.sort(function (a, b) {
+          return a - b;
+        });
+        blues.sort(function (a, b) {
+          return a - b;
+        });
+
+        return {
+          lowRgb: [
+            percentile(reds, lowPercentile),
+            percentile(greens, lowPercentile),
+            percentile(blues, lowPercentile),
+          ],
+          highRgb: [
+            percentile(reds, highPercentile),
+            percentile(greens, highPercentile),
+            percentile(blues, highPercentile),
+          ],
+        };
+      }
+
+      function percentile(sortedArray, p) {
+        const idx = Math.min(
+          sortedArray.length - 1,
+          Math.max(0, Math.floor((p / 100) * (sortedArray.length - 1))),
+        );
+        return sortedArray[idx];
+      }
+
+      function normalizeToRgba(
+        restored,
+        originalRgba,
+        width,
+        height,
+        region,
+        lowRgb,
+        highRgb,
+      ) {
+        const output = new Uint8ClampedArray(originalRgba);
+        const pixelCount = region.width * region.height;
+
+        for (let p = 0; p < pixelCount; p++) {
+          const rgbIndex = p * 3;
+          const rgbaIndex = regionPixelOffset(region, p, width);
+
+          output[rgbaIndex] = normalizeChannel(
+            restored[rgbIndex],
+            lowRgb[0],
+            highRgb[0],
+          );
+          output[rgbaIndex + 1] = normalizeChannel(
+            restored[rgbIndex + 1],
+            lowRgb[1],
+            highRgb[1],
+          );
+          output[rgbaIndex + 2] = normalizeChannel(
+            restored[rgbIndex + 2],
+            lowRgb[2],
+            highRgb[2],
+          );
+          output[rgbaIndex + 3] = originalRgba[rgbaIndex + 3];
+        }
+
+        return output;
+      }
+
+      function sanitizeRegion(width, height, regionInput) {
+        if (!regionInput) {
+          return { x: 0, y: 0, width: width, height: height };
+        }
+
+        const x = Math.max(
+          0,
+          Math.min(width - 1, Math.round(regionInput.x || 0)),
+        );
+        const y = Math.max(
+          0,
+          Math.min(height - 1, Math.round(regionInput.y || 0)),
+        );
+        const regionWidth = Math.max(
+          1,
+          Math.min(width - x, Math.round(regionInput.width || width)),
+        );
+        const regionHeight = Math.max(
+          1,
+          Math.min(
+            height - y,
+            Math.round(regionInput.height || height),
+          ),
+        );
+        return { x: x, y: y, width: regionWidth, height: regionHeight };
+      }
+
+      function regionPixelOffset(region, regionPixelIndex, fullWidth) {
+        const localX = regionPixelIndex % region.width;
+        const localY = Math.floor(regionPixelIndex / region.width);
+        const globalIndex = ((region.y + localY) * fullWidth) +
+          region.x + localX;
+        return globalIndex * 4;
+      }
+
+      function normalizeChannel(value, low, high) {
+        const denom = Math.max(1e-12, high - low);
+        return clamp255(((value - low) / denom) * 255);
+      }
+
+      function clamp255(value) {
+        return Math.max(0, Math.min(255, Math.round(value)));
+      }
+
+      function postProgress(message, percent) {
+        self.postMessage({
+          type: "progress",
+          message: message,
+          percent: percent,
+        });
+      }
+    </script>
+  </body>
+</html>
