@@ -30,7 +30,7 @@ src/index.html
 
 ## Quick start
 
-1. Open `decorrelation-stretch.html`.
+1. Open `src/index.html`.
 2. Click the original image area, or drag and drop an image file onto it.
 3. Select a preset.
 4. Optionally drag a rectangle on the original image to limit the enhancement region.
@@ -123,7 +123,7 @@ Typical fields include:
 }
 ```
 
-## How it works
+## How Decorrelation Stretch works
 
 ### 1. Pixel representation
 
@@ -347,11 +347,6 @@ Recommended workflow:
 
 ## Limitations
 
-- The tool does not perform OCR.
-- The tool does not automatically detect numbers, animals, paintings, characters, or patterns.
-- The tool does not remove blur.
-- The tool does not perform denoising.
-- The tool does not perform illumination correction.
 - The tool does not guarantee that an enhanced feature is semantically meaningful.
 - The selected-region mode processes only the selected rectangle and leaves the rest of the image unchanged.
 - The percentile calculation uses sorted arrays, which is simple and accurate but may be memory-intensive for very large regions.
